@@ -13,7 +13,6 @@
 #include "core/device_tracker.hpp"
 #include "core/ids_engine.hpp"
 #include "core/packet_storage.hpp"
-#include "core/wifi_live_scanner.hpp"
 #include <memory>
 #include <mutex>
 #include <vector>

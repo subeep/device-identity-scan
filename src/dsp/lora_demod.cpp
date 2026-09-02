@@ -33,10 +33,11 @@ void LoraDemodulator::demodulate_lora_channel(const ComplexSample* samples, size
         sum_pwr += std::norm(samples[i]);
     }
     float avg_pwr = sum_pwr / static_cast<float>(count);
-    float rssi_dbm = 10.0f * std::log10(std::max(avg_pwr, 1e-12f)) + 10.0f;
+    float rssi_dbm = 10.0f * std::log10(std::max(avg_pwr, 1e-12f)) - 45.0f;
+    rssi_dbm = std::clamp(rssi_dbm, -95.0f, -30.0f);
 
     // If signal burst exceeds threshold in LoRa band
-    if (rssi_dbm > -65.0f && count >= 4096) {
+    if (rssi_dbm > -85.0f && count >= 4096) {
         // Demodulate LoRa packet
         auto pkt = std::make_shared<Packet>();
         pkt->protocol = ProtocolType::LORA;

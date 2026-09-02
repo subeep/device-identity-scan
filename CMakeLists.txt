@@ -45,7 +45,6 @@ set(CORE_SOURCES
     src/core/device_tracker.cpp
     src/core/ids_engine.cpp
     src/core/packet_storage.cpp
-    src/core/wifi_live_scanner.cpp
     src/dsp/fft_analyzer.cpp
     src/dsp/ble_demod.cpp
     src/dsp/zigbee_demod.cpp

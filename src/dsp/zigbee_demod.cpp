@@ -123,7 +123,8 @@ void ZigbeeDemodulator::demodulate_zigbee_channel(const ComplexSample* samples, 
         }
     }
     avg_pwr /= static_cast<float>(out_len);
-    float rssi_dbm = 10.0f * std::log10(std::max(avg_pwr, 1e-12f)) + 12.0f;
+    float rssi_dbm = 10.0f * std::log10(std::max(avg_pwr, 1e-12f)) - 45.0f;
+    rssi_dbm = std::clamp(rssi_dbm, -95.0f, -30.0f);
 
     if (chips.size() < 128) return;
 

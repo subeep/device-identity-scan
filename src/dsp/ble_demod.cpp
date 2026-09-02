@@ -123,10 +123,11 @@ void BleDemodulator::demodulate_ble_channel(const ComplexSample* samples, size_t
     }
     avg_power /= static_cast<float>(out_len);
     float mean_cfo = static_cast<float>(sum_freq / static_cast<double>(out_len));
-    float rssi_dbm = 10.0f * std::log10(std::max(avg_power, 1e-12f)) + 15.0f;
+    float rssi_dbm = 10.0f * std::log10(std::max(avg_power, 1e-12f)) - 45.0f;
+    rssi_dbm = std::clamp(rssi_dbm, -95.0f, -30.0f);
 
     // Gate on active RF energy
-    if (rssi_dbm < -78.0f) {
+    if (rssi_dbm < -85.0f) {
         return;
     }
 

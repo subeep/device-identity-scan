@@ -188,11 +188,6 @@ void SdrManager::initialize() {
     switch_device(SdrDeviceType::SIMULATED);
     hopping_running_ = true;
     hopping_thread_ = std::thread(&SdrManager::hopping_worker_loop, this);
-
-    // Start Live Real-World Wi-Fi Scanner (captures 100% of physical Wi-Fi APs & clients in room)
-    WifiLiveScanner::instance().start([this](const PacketPtr& pkt) {
-        this->on_packet_received(pkt);
-    });
 }
 
 void SdrManager::shutdown() {
