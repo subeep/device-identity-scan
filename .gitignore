@@ -1,0 +1,25 @@
+# Build artifacts
+build/
+bin/
+*.o
+*.a
+*.so
+*.dylib
+*.out
+
+# IDE and OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ImGui & Logs
+imgui.ini
+*.log
+*.pcap
+*.json
+
+# Antigravity artifacts
+.system_generated/
