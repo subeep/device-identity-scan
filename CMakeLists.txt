@@ -63,6 +63,7 @@ set(UI_SOURCES
     src/ui/sdr_controls_view.cpp
     src/ui/device_table_view.cpp
     src/ui/device_details_view.cpp
+    src/ui/cluster_map_view.cpp
     src/ui/spectrum_view.cpp
     src/ui/packet_log_view.cpp
     vendor/imgui/imgui.cpp

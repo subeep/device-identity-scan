@@ -3,6 +3,7 @@
 #include "ui/sdr_controls_view.hpp"
 #include "ui/device_table_view.hpp"
 #include "ui/device_details_view.hpp"
+#include "ui/cluster_map_view.hpp"
 #include "ui/spectrum_view.hpp"
 #include "ui/packet_log_view.hpp"
 #include "common/logger.hpp"
@@ -171,13 +172,23 @@ void UiManager::render_frame() {
             }
         }
 
-        // Tab 3: Full-Width RF Spectrum & Waterfall
+        // Tab 3: Full-Width RSSI Proximity Cluster Map
+        if (ImGui::BeginTabItem("🗺️ RSSI Cluster Map")) {
+            bool clicked = ClusterMapView::render(selected_device_);
+            if (clicked && selected_device_) {
+                device_tab_open_ = true;
+                focus_device_tab_ = true;
+            }
+            ImGui::EndTabItem();
+        }
+
+        // Tab 4: Full-Width RF Spectrum & Waterfall
         if (ImGui::BeginTabItem("📊 RF Spectrum & Waterfall")) {
             SpectrumView::render();
             ImGui::EndTabItem();
         }
 
-        // Tab 4: Full-Width Live Packet Stream & IDS Anomaly Alerts
+        // Tab 5: Full-Width Live Packet Stream & IDS Anomaly Alerts
         if (ImGui::BeginTabItem("📜 Packet Stream & Security IDS")) {
             PacketLogView::render(selected_device_);
             ImGui::EndTabItem();
