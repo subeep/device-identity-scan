@@ -5,13 +5,11 @@
 #include "ui/device_details_view.hpp"
 #include "ui/spectrum_view.hpp"
 #include "ui/packet_log_view.hpp"
-#include "sdr/sdr_manager.hpp"
 #include "common/logger.hpp"
-
-#include <GLFW/glfw3.h>
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include <GLFW/glfw3.h>
 
 namespace discan {
 
@@ -32,13 +30,10 @@ bool UiManager::initialize(const std::string& window_title, int width, int heigh
         return false;
     }
 
-    // GL 3.3 Core Profile
+    // GL 3.3 + GLSL 330
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-#if __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#endif
 
     window_ = glfwCreateWindow(width, height, window_title.c_str(), nullptr, nullptr);
     if (!window_) {
@@ -48,21 +43,20 @@ bool UiManager::initialize(const std::string& window_title, int width, int heigh
     }
 
     glfwMakeContextCurrent(window_);
-    glfwSwapInterval(1); // Enable VSync for smooth 60 FPS
+    glfwSwapInterval(1); // Enable vsync
 
-    // Initialize Dear ImGui
+    // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-    // Apply Cyber-Dark Theme
+    // Apply Sleek Dark Cyberpunk / Tactical Glassmorphism Theme
     Theme::apply_dark_cyber_theme();
 
     // Setup Platform/Renderer backends
     ImGui_ImplGlfw_InitForOpenGL(window_, true);
-    ImGui_ImplOpenGL3_Init("#version 330 core");
+    ImGui_ImplOpenGL3_Init("#version 330");
 
     DISCAN_LOG_INFO("UI Manager initialized successfully (" << width << "x" << height << ")");
     return true;
@@ -77,6 +71,7 @@ void UiManager::run() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        // Render main docking layout and sub-views
         render_frame();
 
         // Rendering
@@ -84,9 +79,8 @@ void UiManager::run() {
         int display_w, display_h;
         glfwGetFramebufferSize(window_, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
-        glClearColor(0.06f, 0.07f, 0.09f, 1.0f);
+        glClearColor(0.06f, 0.08f, 0.11f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window_);
     }
@@ -110,49 +104,87 @@ void UiManager::render_frame() {
     ImGui::Begin("DeviceIdentityScanWorkspace", nullptr, window_flags);
     ImGui::PopStyleVar(3);
 
-    // 1. Top Section: SDR Hardware Controls & Capture Toolbar
+    // 1. Top Section: SDR Hardware Controls & Capture Toolbar (Full Width)
     SdrControlsView::render();
 
-    // Layout dimensions
-    ImVec2 content_avail = ImGui::GetContentRegionAvail();
-    float left_width = content_avail.x * 0.54f;
-    float right_width = content_avail.x - left_width - 8.0f;
-    float total_height = content_avail.y;
+    ImGui::Spacing();
 
-    float top_panel_height = total_height * 0.58f;
-    float bottom_panel_height = total_height - top_panel_height - 8.0f;
+    // 2. Master Workspace Tab Bar (Spanning full horizontal width)
+    ImGuiTabBarFlags tab_bar_flags = ImGuiTabBarFlags_Reorderable | ImGuiTabBarFlags_FittingPolicyScroll;
+    if (ImGui::BeginTabBar("MasterWorkspaceTabBar", tab_bar_flags)) {
+        
+        // Tab 1: Full-Width Devices Registry
+        ImGuiTabItemFlags dev_list_flags = 0;
+        if (focus_devices_list_) {
+            dev_list_flags |= ImGuiTabItemFlags_SetSelected;
+            focus_devices_list_ = false;
+        }
+        if (ImGui::BeginTabItem("📱 Discovered Devices Registry", nullptr, dev_list_flags)) {
+            bool clicked = DeviceTableView::render(selected_device_);
+            if (clicked && selected_device_) {
+                device_tab_open_ = true;
+                focus_device_tab_ = true;
+            }
+            ImGui::EndTabItem();
+        }
 
-    // 2. Left Column: Device Registry Table (Top) & Real-time RF Spectrum (Bottom)
-    ImGui::BeginGroup();
-    {
-        // Device Table View
-        ImGui::BeginChild("LeftTopPanel", ImVec2(left_width, top_panel_height), false);
-        DeviceTableView::render(selected_device_);
-        ImGui::EndChild();
+        // Tab 2: Dynamic Dedicated Device Inspector (Only open/visible when a device is clicked)
+        if (device_tab_open_ && selected_device_) {
+            ImGuiTabItemFlags inspect_flags = 0;
+            if (focus_device_tab_) {
+                inspect_flags |= ImGuiTabItemFlags_SetSelected;
+                focus_device_tab_ = false;
+            }
 
-        // RF Spectrum & Waterfall View
-        ImGui::BeginChild("LeftBottomPanel", ImVec2(left_width, bottom_panel_height), false);
-        SpectrumView::render();
-        ImGui::EndChild();
+            std::string dev_title = !selected_device_->display_name.empty() 
+                ? selected_device_->display_name 
+                : selected_device_->device_key;
+            std::string tab_name = "🔍 " + dev_title + " (" + protocol_to_short_string(selected_device_->protocol) + ")###DeviceInspectTab";
+
+            if (ImGui::BeginTabItem(tab_name.c_str(), &device_tab_open_, inspect_flags)) {
+                // Top Navigation Bar inside Device Inspector
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.45f, 0.25f, 0.85f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 0.65f, 0.35f, 1.0f));
+                if (ImGui::Button("⬅ Back to Discovered Devices List")) {
+                    focus_devices_list_ = true;
+                }
+                ImGui::PopStyleColor(2);
+
+                ImGui::SameLine();
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.15f, 0.15f, 0.85f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.75f, 0.2f, 0.2f, 1.0f));
+                if (ImGui::Button("✕ Close Inspector")) {
+                    device_tab_open_ = false;
+                    focus_devices_list_ = true;
+                }
+                ImGui::PopStyleColor(2);
+
+                ImGui::SameLine();
+                ImGui::TextDisabled("| Inspected Hardware Address: %s", selected_device_->device_key.c_str());
+
+                ImGui::Separator();
+
+                // Full-width Device Details View
+                DeviceDetailsView::render(selected_device_);
+
+                ImGui::EndTabItem();
+            }
+        }
+
+        // Tab 3: Full-Width RF Spectrum & Waterfall
+        if (ImGui::BeginTabItem("📊 RF Spectrum & Waterfall")) {
+            SpectrumView::render();
+            ImGui::EndTabItem();
+        }
+
+        // Tab 4: Full-Width Live Packet Stream & IDS Anomaly Alerts
+        if (ImGui::BeginTabItem("📜 Packet Stream & Security IDS")) {
+            PacketLogView::render(selected_device_);
+            ImGui::EndTabItem();
+        }
+
+        ImGui::EndTabBar();
     }
-    ImGui::EndGroup();
-
-    ImGui::SameLine();
-
-    // 3. Right Column: Selected Device Deep Inspector (Top) & Live Packet Stream / Alerts (Bottom)
-    ImGui::BeginGroup();
-    {
-        // Selected Device Deep Inspector
-        ImGui::BeginChild("RightTopPanel", ImVec2(right_width, top_panel_height), false);
-        DeviceDetailsView::render(selected_device_);
-        ImGui::EndChild();
-
-        // Live Packet Stream & IDS Alerts View
-        ImGui::BeginChild("RightBottomPanel", ImVec2(right_width, bottom_panel_height), false);
-        PacketLogView::render(selected_device_);
-        ImGui::EndChild();
-    }
-    ImGui::EndGroup();
 
     ImGui::End();
 }

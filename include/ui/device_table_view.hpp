@@ -1,13 +1,12 @@
 #pragma once
 
 #include "core/device.hpp"
-#include <string>
 
 namespace discan {
 
 class DeviceTableView {
 public:
-    static void render(DevicePtr& selected_device);
+    static bool render(DevicePtr& selected_device);
 
 private:
     static bool show_wifi_;

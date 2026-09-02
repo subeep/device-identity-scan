@@ -14,20 +14,16 @@ bool DeviceTableView::show_zigbee_ = true;
 bool DeviceTableView::show_lora_ = true;
 char DeviceTableView::search_filter_[128] = "";
 
-void DeviceTableView::render(DevicePtr& selected_device) {
+bool DeviceTableView::render(DevicePtr& selected_device) {
+    bool device_inspected = false;
     auto& tracker = DeviceTracker::instance();
     auto devices = tracker.get_devices();
-
-    // Auto-select first device if none selected
-    if (!selected_device && !devices.empty()) {
-        selected_device = devices.front();
-    }
 
     ImGui::BeginChild("DeviceTableContainer", ImVec2(0, 0), true);
 
     // Filter Bar: Protocol checkboxes + Search input + Device count badges
     ImGui::AlignTextToFramePadding();
-    ImGui::TextColored(ImVec4(0.0f, 0.85f, 1.0f, 1.0f), "DEVICES (%lu UNIQUE):", devices.size());
+    ImGui::TextColored(ImVec4(0.0f, 0.85f, 1.0f, 1.0f), "DISCOVERED DEVICES (%lu UNIQUE):", devices.size());
     ImGui::SameLine();
 
     size_t wifi_cnt = tracker.count_by_protocol(ProtocolType::WIFI);
@@ -62,32 +58,34 @@ void DeviceTableView::render(DevicePtr& selected_device) {
     ImGui::SameLine();
     ImGui::Text(" | Search:");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(180);
+    ImGui::SetNextItemWidth(200);
     ImGui::InputText("##DeviceSearch", search_filter_, sizeof(search_filter_));
+
+    ImGui::SameLine();
+    ImGui::TextDisabled("(Click any device to open detailed Inspector Tab)");
 
     ImGui::Separator();
 
-    // Multi-column Table view with complete decoded information
+    // Multi-column Table view with complete decoded information spanning 100% horizontal width
     static ImGuiTableFlags table_flags =
         ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable |
         ImGuiTableFlags_Sortable | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter |
         ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY;
 
-    if (ImGui::BeginTable("DeviceRegistryTable", 8, table_flags)) {
-        ImGui::TableSetupColumn("Protocol", ImGuiTableColumnFlags_WidthFixed, 75.0f);
-        ImGui::TableSetupColumn("Address / DevEUI", ImGuiTableColumnFlags_WidthFixed, 145.0f);
-        ImGui::TableSetupColumn("Name / SSID", ImGuiTableColumnFlags_WidthFixed, 140.0f);
-        ImGui::TableSetupColumn("Decoded Header / Protocol Info", ImGuiTableColumnFlags_WidthStretch, 260.0f);
-        ImGui::TableSetupColumn("Manufacturer / OUI", ImGuiTableColumnFlags_WidthFixed, 130.0f);
-        ImGui::TableSetupColumn("Ch / Freq", ImGuiTableColumnFlags_WidthFixed, 95.0f);
-        ImGui::TableSetupColumn("Signal (RSSI)", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-        ImGui::TableSetupColumn("Packets", ImGuiTableColumnFlags_WidthFixed, 65.0f);
+    if (ImGui::BeginTable("DeviceRegistryTable", 9, table_flags)) {
+        ImGui::TableSetupColumn("Protocol", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("Address / DevEUI", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+        ImGui::TableSetupColumn("Device Name / SSID", ImGuiTableColumnFlags_WidthFixed, 200.0f);
+        ImGui::TableSetupColumn("Decoded Header / Protocol Info", ImGuiTableColumnFlags_WidthStretch, 300.0f);
+        ImGui::TableSetupColumn("Manufacturer / OUI", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+        ImGui::TableSetupColumn("Ch / Freq", ImGuiTableColumnFlags_WidthFixed, 105.0f);
+        ImGui::TableSetupColumn("Signal (RSSI)", ImGuiTableColumnFlags_WidthFixed, 125.0f);
+        ImGui::TableSetupColumn("Packets", ImGuiTableColumnFlags_WidthFixed, 75.0f);
+        ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 95.0f);
         ImGui::TableHeadersRow();
 
         std::string filter_str = search_filter_;
         std::transform(filter_str.begin(), filter_str.end(), filter_str.begin(), ::tolower);
-
-        auto now = std::chrono::system_clock::now();
 
         for (const auto& dev : devices) {
             // Protocol filters
@@ -109,74 +107,76 @@ void DeviceTableView::render(DevicePtr& selected_device) {
 
             bool is_selected = (selected_device && selected_device->device_key == dev->device_key);
 
-            // Column 0: Protocol badge
+            // Column 0: Protocol badge (Selectable for the entire row)
             ImGui::TableSetColumnIndex(0);
             ImVec4 proto_col = Theme::get_protocol_color(dev->protocol);
             ImGui::PushStyleColor(ImGuiCol_Text, proto_col);
-            if (ImGui::Selectable(protocol_to_short_string(dev->protocol), is_selected, ImGuiSelectableFlags_SpanAllColumns)) {
+            std::string sel_label = std::string(protocol_to_short_string(dev->protocol)) + "##" + dev->device_key;
+            if (ImGui::Selectable(sel_label.c_str(), is_selected, ImGuiSelectableFlags_SpanAllColumns)) {
                 selected_device = dev;
+                device_inspected = true;
             }
             ImGui::PopStyleColor();
 
-            // Column 1: Address
+            // Column 1: Hardware MAC / Key
             ImGui::TableSetColumnIndex(1);
             ImGui::Text("%s", dev->device_key.c_str());
 
-            // Column 2: Name / SSID
+            // Column 2: Name / SSID / Model
             ImGui::TableSetColumnIndex(2);
             if (!dev->display_name.empty()) {
-                ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "%s", dev->display_name.c_str());
+                ImGui::TextColored(ImVec4(0.0f, 0.85f, 1.0f, 1.0f), "%s", dev->display_name.c_str());
             } else {
-                ImGui::TextDisabled("<Unknown>");
+                ImGui::TextDisabled("<Unnamed Device>");
             }
 
-            // Column 3: Decoded Header / Protocol Metadata Info
+            // Column 3: Decoded Protocol & Header Info
             ImGui::TableSetColumnIndex(3);
             if (!dev->decoded_summary.empty()) {
-                ImGui::TextColored(ImVec4(0.85f, 0.90f, 0.95f, 1.0f), "%s", dev->decoded_summary.c_str());
-            } else if (!dev->extra_info_1.empty()) {
-                ImGui::Text("%s | %s", dev->extra_info_1.c_str(), dev->extra_info_2.c_str());
+                ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.85f, 1.0f), "%s", dev->decoded_summary.c_str());
             } else {
-                ImGui::TextDisabled("Preamble / Header Decoded");
+                ImGui::TextDisabled("Frame data decoded");
             }
 
-            // Column 4: Manufacturer
+            // Column 4: Manufacturer / OUI
             ImGui::TableSetColumnIndex(4);
-            if (!dev->manufacturer.empty() && dev->manufacturer != "Unknown") {
-                ImGui::TextColored(ImVec4(0.9f, 0.8f, 0.4f, 1.0f), "%s", dev->manufacturer.c_str());
-            } else {
-                ImGui::TextDisabled("Generic / Unknown");
-            }
+            ImGui::TextColored(ImVec4(1.0f, 0.84f, 0.0f, 1.0f), "%s", dev->manufacturer.c_str());
 
-            // Column 5: Channel / Freq
+            // Column 5: Channel / Frequency
             ImGui::TableSetColumnIndex(5);
             if (dev->primary_channel > 0) {
-                ImGui::Text("Ch %d (%.0fM)", dev->primary_channel, dev->last_frequency_hz / 1e6);
+                ImGui::Text("Ch %d (%.1fM)", dev->primary_channel, dev->last_frequency_hz / 1e6);
             } else {
-                ImGui::Text("%.2f MHz", dev->last_frequency_hz / 1e6);
+                ImGui::Text("%.3f MHz", dev->last_frequency_hz / 1e6);
             }
 
-            // Column 6: RSSI progress bar + text
+            // Column 6: Signal Strength RSSI
             ImGui::TableSetColumnIndex(6);
-            float norm_rssi = std::clamp((dev->current_rssi + 100.0f) / 70.0f, 0.0f, 1.0f); // -100dBm to -30dBm
-            char rssi_str[32];
-            std::snprintf(rssi_str, sizeof(rssi_str), "%.0f dBm", dev->current_rssi);
-            
-            // Color code RSSI bar
-            ImVec4 bar_color = (dev->current_rssi > -60.0f) ? ImVec4(0.2f, 0.85f, 0.3f, 1.0f) :
-                               ((dev->current_rssi > -75.0f) ? ImVec4(0.9f, 0.8f, 0.2f, 1.0f) : ImVec4(0.85f, 0.3f, 0.2f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, bar_color);
-            ImGui::ProgressBar(norm_rssi, ImVec2(-1, 0), rssi_str);
-            ImGui::PopStyleColor();
+            ImVec4 rssi_col = (dev->current_rssi > -65.0f) ? ImVec4(0.0f, 1.0f, 0.4f, 1.0f) :
+                              (dev->current_rssi > -80.0f) ? ImVec4(1.0f, 0.8f, 0.0f, 1.0f) : ImVec4(1.0f, 0.3f, 0.3f, 1.0f);
+            ImGui::TextColored(rssi_col, "%.0f dBm [%.0f/%.0f]", dev->current_rssi, dev->min_rssi, dev->max_rssi);
 
-            // Column 7: Packet count
+            // Column 7: Total Packets
             ImGui::TableSetColumnIndex(7);
             ImGui::Text("%lu", dev->total_packets);
+
+            // Column 8: Action Inspect Button
+            ImGui::TableSetColumnIndex(8);
+            std::string btn_id = "Inspect##" + dev->device_key;
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.45f, 0.75f, 0.8f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 0.6f, 1.0f, 1.0f));
+            if (ImGui::SmallButton(btn_id.c_str())) {
+                selected_device = dev;
+                device_inspected = true;
+            }
+            ImGui::PopStyleColor(2);
         }
+
         ImGui::EndTable();
     }
 
     ImGui::EndChild();
+    return device_inspected;
 }
 
 } // namespace discan
